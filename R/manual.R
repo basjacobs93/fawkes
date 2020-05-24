@@ -99,3 +99,76 @@ AxiManual <- R6::R6Class('AxiManual',
     axidraw = NULL
   )
 )
+
+#' @export
+eleks_manual <- function(units = 'cm', options = axi_options()) {
+  units <- match.arg(tolower(units), c('cm', 'in'))
+  eleksdraw <- import_eleksdraw()
+  # eleksdraw$interactive()
+  # eleksdraw$options$units <- match(units, c('in', 'cm')) - 1L
+  # eleksdraw <- set_options(eleksdraw, options)
+  EleksManual$new(eleksdraw)
+}
+
+EleksManual <- R6::R6Class('EleksManual',
+                         public = list(
+                           initialize = function(eleksdraw) {
+                             private$eleksdraw <- eleksdraw
+                           },
+                           print = function(...) {
+                             cat("An EleksDraw connection. See `?axi_manual` for information about its methods\n")
+                           },
+                           connect = function() {
+                             # private$eleksdraw$connect()
+                             invisible(self)
+                           },
+                           disconnect = function() {
+                             private$eleksdraw$disconnect()
+                             invisible(self)
+                           },
+                           update_options = function(options) {
+                             # private$eleksdraw <- set_options(private$eleksdraw, options)
+                             # private$eleksdraw$update()
+                             invisible(self)
+                           },
+                           go_to = function(x, y) {
+                             private$eleksdraw$move(10*x, 10*y)
+                             invisible(self)
+                           },
+                           move_to = function(x, y) {
+                             private$eleksdraw$pen_up()
+                             private$eleksdraw$move(10*x, 10*y)
+                             invisible(self)
+                           },
+                           line_to = function(x, y) {
+                             private$eleksdraw$pen_down()
+                             private$eleksdraw$move(10*x, 10*y)
+                             invisible(self)
+                           },
+                           go_rel = function(x, y) {
+                             private$eleksdraw$move_rel(10*x, 10*y)
+                             invisible(self)
+                           },
+                           move_rel = function(x, y) {
+                             private$eleksdraw$pen_up()
+                             private$eleksdraw$move_rel(10*x, 10*y)
+                             invisible(self)
+                           },
+                           line_rel = function(x, y) {
+                             private$eleksdraw$pen_down()
+                             private$eleksdraw$move_rel(10*x, 10*y)
+                             invisible(self)
+                           },
+                           pen_up = function() {
+                             private$eleksdraw$pen_up()
+                             invisible(self)
+                           },
+                           pen_down = function() {
+                             private$eleksdraw$pen_down()
+                             invisible(self)
+                           }
+                         ),
+                         private = list(
+                           eleksdraw = NULL
+                         )
+)

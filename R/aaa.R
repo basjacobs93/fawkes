@@ -36,6 +36,18 @@ import_axidraw <- function() {
   ad
 }
 
+import_eleksdraw <- function() {
+  eleksdraw <- try(reticulate::import('eleksdrawpy'))
+  if (inherits(eleksdraw, 'try-error')) {
+    rlang::abort('eleksdrawpy could not be loaded.\nMake sure you have installed the library.')
+  }
+  ed <- try(eleksdraw$Device())
+  if (inherits(ed, 'try-error')) {
+    rlang::abort('EleksDraw class could not be initiated.\nMake sure your EleksDraw is connected.')
+  }
+  ed
+}
+
 paper_dimensions <- function(name, portrait = TRUE) {
   if (is.numeric(name)) {
     if (!length(name) == 2) {

@@ -2,6 +2,7 @@
 % Please edit documentation in R/device.R
 \name{axi_dev}
 \alias{axi_dev}
+\alias{eleks_dev}
 \alias{ghost_dev}
 \title{A graphic device that renders using the AxiDraw pen plooter}
 \usage{
@@ -19,6 +20,22 @@ axi_dev(
   hatch_angle = 45,
   optimize_order = "all",
   options = axi_options()
+)
+
+eleks_dev(
+  paper_size = "A4",
+  portrait = TRUE,
+  margins = 20,
+  tip_size = 1,
+  color = "black",
+  ignore_color = TRUE,
+  ignore_lwd = FALSE,
+  line_overlap = 0.1,
+  min_overlap = -20,
+  draw_fill = TRUE,
+  hatch_angle = 45,
+  optimize_order = "all",
+  options = eleks_options()
 )
 
 ghost_dev(

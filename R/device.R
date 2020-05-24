@@ -79,6 +79,32 @@ axi_dev <- function(paper_size = "A4", portrait = TRUE, margins = 20, tip_size =
 }
 #' @rdname axi_dev
 #' @export
+eleks_dev <- function(paper_size = "A4", portrait = TRUE, margins = 20, tip_size = 1,
+                    color = 'black', ignore_color = TRUE, ignore_lwd = FALSE,
+                    line_overlap = 0.1, min_overlap = -20, draw_fill = TRUE,
+                    hatch_angle = 45, optimize_order = 'all',
+                    options = axi_options()) {
+  paper_size <- paper_dimensions(paper_size, portrait)
+  margins <- expand_margins(margins)
+  size <- paper_size - c(margins[2] + margins[4], margins[1] + margins[3])
+  if (any(size <= 0)) {
+    rlang::abort("margins larger than the paper size")
+  }
+  color <- as.vector(col2rgb(color, TRUE))
+  optimize_order <- match.arg(optimize_order, c('none', 'primitive', 'all'))
+  eleksdraw <- eleks_manual(units = 'cm', options)
+  rdevice(eleksdraw_callback, device_name = 'eleks_device',
+          ad = eleksdraw, size = size, flip = portrait, offset = margins[c(4, 1)],
+          p_width = paper_size[1], tip_size = tip_size, color = color,
+          ignore_color = ignore_color, ignore_lwd = ignore_lwd,
+          line_overlap = line_overlap, min_overlap = min_overlap,
+          draw_fill = draw_fill, hatch_angle = hatch_angle,
+          optimize_order = optimize_order, collection = list(), current_primitive = '',
+          first_page = TRUE, delta = c(0, 0)
+  )
+}
+#' @rdname axi_dev
+#' @export
 ghost_dev <- function(paper_size = "A4", portrait = TRUE, margins = 20, tip_size = 1,
                      color = 'black', ignore_color = TRUE, ignore_lwd = FALSE,
                      line_overlap = 0.1, min_overlap = -20, draw_fill = TRUE,
@@ -256,6 +282,183 @@ axidraw_callback <- function(device_call, args, state) {
   state
 }
 .axi_path <- function(args, state) {
+  path_id <- rep(seq_len(args$npoly), args$nper)
+  x <- split(args$x, path_id)
+  y <- split(args$y, path_id)
+  path <- lapply(seq_along(x), function(i) {
+    list(x = x[[i]], y = y[[i]])
+  })
+
+  # Fill
+  if (has_fill(state)) {
+    state <- update_fill(state, 'path')
+    fill <- create_fill(path, state)
+    state <- collect_lines(fill, state, as_one = FALSE)
+  }
+
+  # Stroke
+  if (has_stroke(state)) {
+    state <- update_stroke(state, 'path')
+    stroke <- create_closed_stroke(path, state)
+    state <- collect_lines(stroke, state)
+  }
+
+  state
+}
+
+#' Callbacks for the fawkes devices
+#'
+#' @keywords internal
+#' @export
+eleksdraw_callback <- function(device_call, args, state) {
+  state <- switch(device_call,
+                  open = .eleks_open(args, state),
+                  close = .eleks_close(args, state),
+                  onExit = .eleks_abort(args, state),
+                  clip = .eleks_clip(args, state),
+                  newPage = .eleks_new_page(args, state),
+                  circle = .eleks_circle(args, state),
+                  rect = .eleks_rect(args, state),
+                  line = .eleks_line(args, state),
+                  polyline = .eleks_polyline(args, state),
+                  polygon = .eleks_polygon(args, state),
+                  path = .eleks_path(args, state)
+  )
+  state
+}
+
+.eleks_open <- function(args, state) {
+  state$dd$right <- state$rdata$size[1]
+  state$dd$bottom <- state$rdata$size[2]
+  state$dd$clipRight <- state$rdata$size[1]
+  state$dd$clipBottom <- state$rdata$size[2]
+  state$dd$ipr <- c(0.03937, 0.03937)
+  state$rdata$last_primitive <- NA
+  state$rdata$calls <- list()
+  # state$rdata$ad$connect()
+  state
+}
+.eleks_close <- function(args, state) {
+  draw_collection(state, NA)
+  state$rdata$ad$move_to(0, 0)
+  state$rdata$ad$disconnect()
+  state
+}
+.eleks_clip <- function(args, state) {
+  state$dd$clipLeft <- args$x0
+  state$dd$clipRight <- args$x1
+  state$dd$clipTop <- args$y0
+  state$dd$clipBottom <- args$y1
+  state
+}
+.eleks_new_page <- function(args, state) {
+  state$rdata$ad$move_to(0, 0)
+  if (!state$rdata$first_page) {
+    cli::cli_alert_warning("Change paper (press enter when ready for next page)")
+    readline()
+  }
+  state$rdata$first_page <- FALSE
+  state
+}
+.eleks_abort <- function(args, state) {
+  state$rdata$ad$move_to(0, 0)
+  state
+}
+.eleks_circle <- function(args, state) {
+  n_points <-  round((2 * pi) / acos((args$r - 0.5) / args$r)) * 10;
+  angles <- seq(0, 2*pi, length.out = n_points)
+  shape <- list(
+    x = cos(angles) * args$r + args$x,
+    y = sin(angles) * args$r + args$y
+  )
+
+  # Fill
+  if (has_fill(state)) {
+    state <- update_fill(state, 'circle')
+    fill <- create_circle_fill(args$x, args$y, args$r, angles, state)
+    state <- collect_lines(fill, state)
+  }
+
+  # Stroke
+  if (has_stroke(state)) {
+    state <- update_stroke(state, 'circle')
+    stroke <- create_closed_stroke(list(shape), state)
+    state <- collect_lines(stroke, state)
+  }
+
+  state
+}
+.eleks_rect <- function(args, state) {
+  shape <- list(
+    x = c(args$x0, args$x1)[c(1, 2, 2, 1)],
+    y = c(args$y0, args$y1)[c(1, 1, 2, 2)]
+  )
+
+  # Fill
+  if (has_fill(state)) {
+    state <- update_fill(state, 'rect')
+    fill <- create_fill(shape, state)
+    state <- collect_lines(fill, state)
+  }
+
+  # Stroke
+  if (has_stroke(state)) {
+    state <- update_stroke(state, 'rect')
+    stroke <- create_closed_stroke(list(shape), state)
+    state <- collect_lines(stroke, state)
+  }
+
+  state
+}
+.eleks_line <- function(args, state) {
+  if (has_stroke(state)) {
+    line <- list(
+      x = c(args$x1, args$x2),
+      y = c(args$y1, args$y2)
+    )
+
+    state <- update_stroke(state, 'line')
+    stroke <- create_open_stroke(list(line), state)
+    state <- collect_lines(stroke, state)
+  }
+  state
+}
+.eleks_polyline <- function(args, state) {
+  if (has_stroke(state)) {
+    line <- list(
+      x = args$x,
+      y = args$y
+    )
+
+    state <- update_stroke(state, 'polyline')
+    stroke <- create_open_stroke(list(line), state)
+    state <- collect_lines(stroke, state)
+  }
+  state
+}
+.eleks_polygon <- function(args, state) {
+  shape <- list(
+    x = args$x,
+    y = args$y
+  )
+
+  # Fill
+  if (has_fill(state)) {
+    state <- update_fill(state, 'polygon')
+    fill <- create_fill(list(shape), state)
+    state <- collect_lines(fill, state)
+  }
+
+  # Stroke
+  if (has_stroke(state)) {
+    state <- update_stroke(state, 'polygon')
+    stroke <- create_closed_stroke(list(shape), state)
+    state <- collect_lines(stroke, state)
+  }
+
+  state
+}
+.eleks_path <- function(args, state) {
   path_id <- rep(seq_len(args$npoly), args$nper)
   x <- split(args$x, path_id)
   y <- split(args$y, path_id)
